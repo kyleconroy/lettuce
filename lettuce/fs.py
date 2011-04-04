@@ -37,7 +37,10 @@ class FeatureLoader(object):
             root = FileSystem.dirname(filename)
             sys.path.insert(0, root)
             to_load = FileSystem.filename(filename, with_extension=False)
-            module = __import__(to_load)
+            try:
+                module = __import__(to_load)
+            except ValueError:
+                raise ValueError("Cannot load module %s" % filename)
             reload(module) # always take fresh meat :)
             sys.path.remove(root)
 
