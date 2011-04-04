@@ -312,7 +312,7 @@ class Step(object):
             def elsewhere(step):
                 # actual step behavior, maybe.
 
-        This will raise the error of the first failing step (thus halting 
+        This will raise the error of the first failing step (thus halting
         execution of the step) if a subordinate step fails.
 
         """
@@ -655,6 +655,11 @@ class Scenario(object):
 
         return scenario
 
+
+class Background(Scenario):
+    pass
+
+
 class Feature(object):
     """ Object that represents a feature."""
     described_at = None
@@ -667,11 +672,12 @@ class Feature(object):
         self.name = name
         self.language = language
 
-        self.scenarios, self.description = self._parse_remaining_lines(
+        result = self._parse_remaining_lines(
             remaining_lines,
             original_string,
             with_file
         )
+        self.scenarios, self.background, self.description = result
 
         self.original_string = original_string
 
@@ -797,9 +803,11 @@ class Feature(object):
 
         scenarios = [Scenario.from_string(s, **kw) for s in scenario_strings]
 
-        return scenarios, description
+        background = None
 
-    def run(self, scenarios=None, ignore_case=True):
+        return scenarios, background, description
+
+    def run(self, scenarios=None, background=None, ignore_case=True):
         call_hook('before_each', 'feature', self)
         scenarios_ran = []
 
