@@ -323,6 +323,11 @@ def test_background():
     "It should parse the background section"
     feature = Feature.from_string(FEATURE11)
     assert_true(feature.background is not None)
+    assert_equals(len(feature.background.steps), 2)
+    assert_equals(feature.background.steps[0].sentence,
+                  "Given I'm working at Video Library")
+    assert_equals(feature.background.steps[1].sentence,
+                  "And there is a sale today")
 
 def test_no_background():
     "It should have the background set to None"

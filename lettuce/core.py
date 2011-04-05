@@ -35,6 +35,7 @@ class Language(object):
     name = 'English'
     native = 'English'
     feature = 'Feature'
+    background = 'Background'
     scenario = 'Scenario'
     examples = 'Examples|Scenarios'
     scenario_outline = 'Scenario Outline'
@@ -655,7 +656,6 @@ class Scenario(object):
 
         return scenario
 
-
 class Background(Scenario):
     pass
 
@@ -776,34 +776,46 @@ class Feature(object):
         self.described_at = definition
 
     def _parse_remaining_lines(self, lines, original_string, with_file=None):
-
         joined = u"\n".join(lines[1:])
 
-        # replacing occurrencies of Scenario Outline, with just "Scenario"
         scenario_prefix = u'%s:' % self.language.first_of_scenario
+        background_prefix = u'%s:' % self.language.background
+
+        # replacing occurrencies of Scenario Outline, with just "Scenario"
         regex = re.compile(u"%s:\s" % self.language.scenario_separator, re.U | re.I)
         joined = regex.sub(scenario_prefix, joined)
 
-        parts = strings.split_wisely(joined, scenario_prefix)
+        # Split on Background: and Scenario:
+        combo_prefix = u'%s:|%s:' % (self.language.first_of_scenario,
+                                     self.language.background)
+        parts = strings.split_wisely(joined, combo_prefix)
 
         description = u""
-
-        if not re.search("^" + scenario_prefix, joined):
-            description = parts[0]
-            parts.pop(0)
-
-        scenario_strings = [
-            u"%s: %s" % (self.language.first_of_scenario, s) for s in parts if s.strip()
-        ]
+        background = None
         kw = dict(
             original_string=original_string,
             with_file=with_file,
             language=self.language
         )
 
-        scenarios = [Scenario.from_string(s, **kw) for s in scenario_strings]
+        description_prefix = u'^%s:|^%s:' % (self.language.first_of_scenario,
+                                             self.language.background)
 
-        background = None
+        if not re.search(description_prefix, joined):
+            description = parts[0]
+            parts.pop(0)
+
+        if re.search(background_prefix, joined):
+            bg = "%s:\n%s" % (self.language.background, parts.pop(0).strip())
+
+            background = Background.from_string(bg, **kw)
+
+        scenario_strings = [
+            u"%s: %s" % (self.language.first_of_scenario,
+                         s) for s in parts if s.strip()
+        ]
+
+        scenarios = [Scenario.from_string(s, **kw) for s in scenario_strings]
 
         return scenarios, background, description
 
