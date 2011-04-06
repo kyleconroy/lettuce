@@ -550,34 +550,36 @@ class Scenario(object):
         results = []
         call_hook('before_each', 'scenario', self)
 
-        def run_scenario(almost_self, order=-1, outline=None, run_callbacks=False):
-            all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail = Step.run_all(self.steps, outline, run_callbacks, ignore_case)
-            skip = lambda x: x not in steps_passed and x not in steps_undefined and x not in steps_failed
-
-            steps_skipped = filter(skip, all_steps)
-            if outline:
-                call_hook(
-                    'outline', 'scenario', self, order, outline, reasons_to_fail
-                )
-
-            return ScenarioResult(
-                self,
-                steps_passed,
-                steps_failed,
-                steps_skipped,
-                steps_undefined
-            )
-
         if self.outlines:
             first = True
             for index, outline in enumerate(self.outlines):
-                results.append(run_scenario(self, index, outline, run_callbacks=first))
+                results.append(self.run_scenario(ignore_case, outline=outline,
+                                                 order=index, run_callbacks=first))
                 first = False
         else:
-            results.append(run_scenario(self, run_callbacks=True))
+            results.append(self.run_scenario(ignore_case, run_callbacks=True))
 
         call_hook('after_each', 'scenario', self)
         return results
+
+    def run_scenario(self, ignore_case, order=-1, outline=None, run_callbacks=False):
+        results = Step.run_all(self.steps, outline, run_callbacks, ignore_case)
+        all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail = results
+        skip = lambda x: x not in steps_passed and x not in steps_undefined and x not in steps_failed
+
+        steps_skipped = filter(skip, all_steps)
+        if outline:
+            call_hook(
+                'outline', 'scenario', self, order, outline, reasons_to_fail
+                )
+
+        return ScenarioResult(
+            self,
+            steps_passed,
+            steps_failed,
+            steps_skipped,
+            steps_undefined
+            )
 
     def _add_myself_to_steps(self):
         for step in self.steps:
@@ -807,7 +809,6 @@ class Feature(object):
 
         if re.search(background_prefix, joined):
             bg = "%s:\n%s" % (self.language.background, parts.pop(0).strip())
-
             background = Background.from_string(bg, **kw)
 
         scenario_strings = [
@@ -819,7 +820,7 @@ class Feature(object):
 
         return scenarios, background, description
 
-    def run(self, scenarios=None, background=None, ignore_case=True):
+    def run(self, scenarios=None, ignore_case=True):
         call_hook('before_each', 'feature', self)
         scenarios_ran = []
 
@@ -832,6 +833,9 @@ class Feature(object):
         for index, scenario in enumerate(self.scenarios):
             if scenarios_to_run and (index + 1) not in scenarios_to_run:
                 continue
+
+            if self.background:
+                scenarios_ran.append(self.background.run_scenario(ignore_case))
 
             scenarios_ran.extend(scenario.run(ignore_case))
 
