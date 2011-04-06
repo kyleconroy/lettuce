@@ -104,13 +104,28 @@ class ScenarioDescription(object):
 
     def __init__(self, scenario, filename, string, language):
         self.file = fs.relpath(filename)
-        self.line = None
+        self.line = 0
 
         for pline, part in enumerate(string.splitlines()):
             part = part.strip()
             if re.match(u"%s: " % language.scenario_separator + re.escape(scenario.name), part):
                 self.line = pline + 1
                 break
+
+class BackgroundDescription(object):
+    """A simple object that holds filename and line number of a scenario
+    description (scenario within feature file)"""
+
+    def __init__(self, scenario, filename, string, language):
+        self.file = fs.relpath(filename)
+        self.line = 0
+
+        for pline, part in enumerate(string.splitlines()):
+            part = part.strip()
+            if re.match(u"%s:" % language.background, part):
+                self.line = pline + 1
+                break
+
 
 class FeatureDescription(object):
     """A simple object that holds filename and line number of a feature
@@ -450,6 +465,7 @@ class Scenario(object):
     described_at = None
     indentation = 2
     table_indentation = indentation + 2
+    desc = ScenarioDescription
     def __init__(self, name, remaining_lines, keys, outlines, with_file=None,
                  original_string=None, language=None):
 
@@ -467,9 +483,8 @@ class Scenario(object):
         self.original_string = original_string
 
         if with_file and original_string:
-            scenario_definition = ScenarioDescription(self, with_file,
-                                                      original_string,
-                                                      language)
+            scenario_definition = self.desc(self, with_file, original_string,
+                                            language)
             self._set_definition(scenario_definition)
 
         self.solved_steps = list(self._resolve_steps(self.steps, self.outlines,
@@ -607,14 +622,19 @@ class Scenario(object):
     def _set_definition(self, definition):
         self.described_at = definition
 
-    def represented(self):
-        make_prefix = lambda x: u"%s%s: " % (u' ' * self.indentation, x)
+    def _get_head(self):
         if self.outlines:
-            prefix = make_prefix(self.language.first_of_scenario_outline)
+            prefix = self._make_prefix(self.language.first_of_scenario_outline)
         else:
-            prefix = make_prefix(self.language.first_of_scenario)
+            prefix = self._make_prefix(self.language.first_of_scenario)
 
-        head = prefix + self.name
+        return prefix + self.name
+
+    def _make_prefix(self, x):
+        return u"%s%s: " % (u' ' * self.indentation, x)
+
+    def represented(self):
+        head = self._get_head()
 
         return strings.rfill(head, self.feature.max_length + 1, append=u'# %s:%d\n' % (self.described_at.file, self.described_at.line))
 
@@ -659,8 +679,11 @@ class Scenario(object):
         return scenario
 
 class Background(Scenario):
-    pass
 
+    desc = BackgroundDescription
+
+    def _get_head(self):
+        return self._make_prefix(self.language.background)
 
 class Feature(object):
     """ Object that represents a feature."""
@@ -707,6 +730,8 @@ class Feature(object):
         return max_length
 
     def _add_myself_to_scenarios(self):
+        if self.background:
+            self.background.feature = self
         for scenario in self.scenarios:
             scenario.feature = self
 
@@ -721,9 +746,15 @@ class Feature(object):
 
         filename = self.described_at.file
         line = self.described_at.line
-        head = strings.rfill(self.get_head(), length, append=u"# %s:%d\n" % (filename, line))
-        for description, line in zip(self.description.splitlines(), self.described_at.description_at):
-            head += strings.rfill(u"  %s" % description, length, append=u"# %s:%d\n" % (filename, line))
+        head = strings.rfill(self.get_head(), length,
+                             append=u"# %s:%d\n" % (filename, line))
+        for description, line in zip(self.description.splitlines(),
+                                     self.described_at.description_at):
+            head += strings.rfill(u"  %s" % description, length,
+                                  append=u"# %s:%d\n" % (filename, line))
+
+        if self.background:
+            head += self.background.represented()
 
         return head
 
