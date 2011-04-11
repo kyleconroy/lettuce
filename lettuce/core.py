@@ -104,7 +104,7 @@ class ScenarioDescription(object):
 
     def __init__(self, scenario, filename, string, language):
         self.file = fs.relpath(filename)
-        self.line = 0
+        self.line = None
 
         for pline, part in enumerate(string.splitlines()):
             part = part.strip()
@@ -118,7 +118,7 @@ class BackgroundDescription(object):
 
     def __init__(self, scenario, filename, string, language):
         self.file = fs.relpath(filename)
-        self.line = 0
+        self.line = None
 
         for pline, part in enumerate(string.splitlines()):
             part = part.strip()
