@@ -17,6 +17,7 @@
 #
 import os
 import lettuce
+import sys
 from nose.tools import assert_equals, assert_true, with_setup
 from lettuce import Runner
 from tests.asserts import prepare_stdout
@@ -33,11 +34,26 @@ def test_background_runs_before_each_scenario():
     results = runner.run()
     assert_equals(results.steps_passed, 5)
 
-@with_setup(prepare_stdout)
-def test_background_color_output():
-    'Test Background color output'
-    assert_true(False)
-    runner = Runner(feature_name('background_feature'))
-    results = runner.run()
-    assert_equals(results.steps_passed, 5)
+OUTPUT1 = """
+Feature: Validate that background works # tests/functional/syntax_features/background_feature/background_feature.feature:1
+  Background:                           # tests/functional/syntax_features/background_feature/background_feature.feature:3
 
+  Scenario: Counting the world is       # tests/functional/syntax_features/background_feature/background_feature.feature:6
+    When I add one to the world         # tests/functional/syntax_features/background_feature/steps.py:19
+    Then world count should be 6        # tests/functional/syntax_features/background_feature/steps.py:11
+
+  Scenario: Renting a featured movie    # tests/functional/syntax_features/background_feature/background_feature.feature:10
+    Then world count should be 5        # tests/functional/syntax_features/background_feature/steps.py:15
+
+1 feature (1 passed)
+4 scenarios (4 passed)
+5 steps (5 passed)
+"""
+
+@with_setup(prepare_stdout)
+def test_background_colorless_output():
+    'Test Background color output'
+    runner = Runner(feature_name('background_feature'), verbosity=3)
+    runner.run()
+    assert_equals(sys.stdout.getvalue(), OUTPUT1)
+#    assert_stdout_lines(OUTPUT1)
