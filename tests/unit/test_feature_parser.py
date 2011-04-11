@@ -16,8 +16,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from lettuce.core import Scenario
+from lettuce.core import Background
 from lettuce.core import Feature
-from nose.tools import assert_equals
+from nose.tools import assert_equals, assert_true
 
 FEATURE1 = """
 Feature: Rent movies
@@ -148,6 +149,17 @@ Feature: Big sentence
     #     And another one, very tiny
 """
 
+FEATURE11 = """
+Feature: Rent movies
+
+    Background:
+        Given I'm working at Video Library
+        And there is a sale today
+
+    Scenario: Renting a featured movie
+        When the client 'John Doe' rents 'Iron man 2'
+        Then he needs to pay 8 bucks
+"""
 
 def test_feature_has_repr():
     "Feature implements __repr__ nicely"
@@ -306,3 +318,19 @@ def test_comments():
     feature = Feature.from_string(FEATURE10)
 
     assert_equals(feature.max_length, 55)
+
+def test_background():
+    "It should parse the background section"
+    feature = Feature.from_string(FEATURE11)
+    assert_true(feature.background is not None)
+    assert_equals(len(feature.background.steps), 2)
+    assert_equals(feature.background.steps[0].sentence,
+                  "Given I'm working at Video Library")
+    assert_equals(feature.background.steps[1].sentence,
+                  "And there is a sale today")
+
+def test_no_background():
+    "It should have the background set to None"
+    feature = Feature.from_string(FEATURE1)
+    assert_equals(feature.background, None)
+

@@ -20,6 +20,7 @@ from lettuce import core
 from lettuce import registry
 from lettuce.core import Step
 from lettuce.core import Feature
+from lettuce.exceptions import StepLoadingError
 from nose.tools import *
 
 FEATURE1 = """
@@ -92,6 +93,12 @@ Feature: Count step definitions with exceptions as failing steps
     Then this step will be skipped
 """
 
+FEATURE9 = """
+Feature: When using behave_as, the new steps have the same scenario
+  Scenario: The Original Scenario
+    Given I have a step which calls the "access the scenario" step with behave_as
+"""
+
 def step_runner_environ():
     "Make sure the test environment is what is expected"
 
@@ -113,10 +120,15 @@ def step_runner_environ():
     @step(u'When I have a step that raises an exception')
     def raises_exception(step):
         raise Exception()
-    
+
     @step('I have a step which calls the "(.*)" step with behave_as')
     def runs_some_other_step_with_behave_as(step, something_else):
         step.behave_as("When %(i_do_something_else)s" % {'i_do_something_else': something_else})
+
+
+def step_runner_cleanup():
+    from lettuce import registry
+    registry.clear()
 
 @with_setup(step_runner_environ)
 def test_can_count_steps_and_its_states():
@@ -211,7 +223,7 @@ def test_steps_are_aware_of_its_definitions():
 
     step1 = scenario_result.steps_passed[0]
 
-    assert_equals(step1.defined_at.line, 102)
+    assert_equals(step1.defined_at.line, 109)
     assert_equals(step1.defined_at.file, core.fs.relpath(__file__.rstrip("c")))
 
 @with_setup(step_runner_environ)
@@ -301,7 +313,7 @@ def test_count_raised_exceptions_as_failing_steps():
         assert_equals(len(scenario_result.steps_failed), 1)
     finally:
         registry.clear()
-        
+
 def test_step_runs_subordinate_step_with_given():
     global simple_thing_ran
     simple_thing_ran = False
@@ -309,15 +321,15 @@ def test_step_runs_subordinate_step_with_given():
     def simple_thing(step):
         global simple_thing_ran
         simple_thing_ran = True
-    
+
     @step('I do many complex things')
     def complex_things(step):
         step.given('I do something simple')
-    
+
     runnable_step = Step.from_string('Given I do many complex things')
     runnable_step.run(True)
     assert(simple_thing_ran)
-    
+
     del simple_thing_ran
 
 def test_step_runs_subordinate_step_with_then():
@@ -358,36 +370,36 @@ def test_step_runs_subordinate_step_with_when():
 
 def test_multiple_subordinate_steps_are_run():
     'When a step definition calls two subordinate step definitions (that do not fail), both should run.'
-    
+
     @step('I run two subordinate steps')
     def two_subordinate_steps(step):
         step.behave_as("""
             When I run the first sub-step
             And I run the second sub-step
         """)
-    
+
     global first_ran
     global second_ran
     first_ran = False
     second_ran = False
-    
+
     @step('I run the first sub-step$')
     def increment(step):
         global first_ran
         first_ran = True
-    
+
     @step('I run the second sub-step')
     def increment_twice(step):
         global second_ran
         second_ran = True
-    
+
     runnable_step = Step.from_string('Given I run two subordinate steps')
     runnable_step.run(True)
     assert_equals((first_ran, second_ran), (True, True))
-    
+
     del first_ran
     del second_ran
-    
+
 @with_setup(step_runner_environ)
 def test_successful_behave_as_step_passes():
     'When a step definition calls another (successful) step definition with behave_as, that step should be a success.'
@@ -410,7 +422,7 @@ def test_failing_behave_as_step_doesnt_pass():
         runnable_step.run(True)
     except:
         pass
-    
+
     assert_false(runnable_step.passed)
 
 @with_setup(step_runner_environ)
@@ -421,7 +433,7 @@ def test_failing_behave_as_step_fails():
         runnable_step.run(True)
     except:
         pass
-    
+
     assert runnable_step.failed
 
 @with_setup(step_runner_environ)
@@ -429,3 +441,25 @@ def test_failing_behave_as_step_raises_assertion():
     'When a step definition calls another (failing) step definition with behave_as, that step should be marked a failure.'
     runnable_step = Step.from_string('Given I have a step which calls the "other step fails" step with behave_as')
     assert_raises(AssertionError, runnable_step.run, True)
+
+@with_setup(step_runner_environ)
+def test_behave_as_step_can_access_the_scenario():
+    'When a step definition calls another step definition with behave_as, the step called using behave_as should have access to the current scenario'
+    @step('[^"]access the scenario')
+    def access_the_scenario(step):
+        assert_equal(step.scenario.name, 'The Original Scenario')
+
+    try:
+        f = Feature.from_string(FEATURE9)
+        feature_result = f.run()
+        assert feature_result.passed, 'The scenario passed to the behave_as step did not match'
+    finally:
+        registry.clear()
+
+@with_setup(step_runner_environ, step_runner_cleanup)
+def test_invalid_regex_raise_an_error():
+    def load_step():
+        @step('invalid step regex(.*')
+        def step_with_bad_regex(step):
+            pass
+    assert_raises(StepLoadingError, load_step)

@@ -35,6 +35,7 @@ class Language(object):
     name = 'English'
     native = 'English'
     feature = 'Feature'
+    background = 'Background'
     scenario = 'Scenario'
     examples = 'Examples|Scenarios'
     scenario_outline = 'Scenario Outline'
@@ -110,6 +111,21 @@ class ScenarioDescription(object):
             if re.match(u"%s: " % language.scenario_separator + re.escape(scenario.name), part):
                 self.line = pline + 1
                 break
+
+class BackgroundDescription(object):
+    """A simple object that holds filename and line number of a scenario
+    description (scenario within feature file)"""
+
+    def __init__(self, scenario, filename, string, language):
+        self.file = fs.relpath(filename)
+        self.line = None
+
+        for pline, part in enumerate(string.splitlines()):
+            part = part.strip()
+            if re.match(u"%s:" % language.background, part):
+                self.line = pline + 1
+                break
+
 
 class FeatureDescription(object):
     """A simple object that holds filename and line number of a feature
@@ -312,12 +328,16 @@ class Step(object):
             def elsewhere(step):
                 # actual step behavior, maybe.
 
-        This will raise the error of the first failing step (thus halting 
+        This will raise the error of the first failing step (thus halting
         execution of the step) if a subordinate step fails.
 
         """
         lines = string.split('\n')
         steps = self.many_from_lines(lines)
+
+        if hasattr(self, 'scenario'):
+            for step in steps:
+                step.scenario = self.scenario
 
         (_, _, steps_failed, _, _) = self.run_all(steps)
         if not steps_failed:
@@ -449,6 +469,7 @@ class Scenario(object):
     described_at = None
     indentation = 2
     table_indentation = indentation + 2
+    desc = ScenarioDescription
     def __init__(self, name, remaining_lines, keys, outlines, with_file=None,
                  original_string=None, language=None):
 
@@ -466,9 +487,8 @@ class Scenario(object):
         self.original_string = original_string
 
         if with_file and original_string:
-            scenario_definition = ScenarioDescription(self, with_file,
-                                                      original_string,
-                                                      language)
+            scenario_definition = self.desc(self, with_file, original_string,
+                                            language)
             self._set_definition(scenario_definition)
 
         self.solved_steps = list(self._resolve_steps(self.steps, self.outlines,
@@ -549,34 +569,36 @@ class Scenario(object):
         results = []
         call_hook('before_each', 'scenario', self)
 
-        def run_scenario(almost_self, order=-1, outline=None, run_callbacks=False):
-            all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail = Step.run_all(self.steps, outline, run_callbacks, ignore_case)
-            skip = lambda x: x not in steps_passed and x not in steps_undefined and x not in steps_failed
-
-            steps_skipped = filter(skip, all_steps)
-            if outline:
-                call_hook(
-                    'outline', 'scenario', self, order, outline, reasons_to_fail
-                )
-
-            return ScenarioResult(
-                self,
-                steps_passed,
-                steps_failed,
-                steps_skipped,
-                steps_undefined
-            )
-
         if self.outlines:
             first = True
             for index, outline in enumerate(self.outlines):
-                results.append(run_scenario(self, index, outline, run_callbacks=first))
+                results.append(self.run_scenario(ignore_case, outline=outline,
+                                                 order=index, run_callbacks=first))
                 first = False
         else:
-            results.append(run_scenario(self, run_callbacks=True))
+            results.append(self.run_scenario(ignore_case, run_callbacks=True))
 
         call_hook('after_each', 'scenario', self)
         return results
+
+    def run_scenario(self, ignore_case, order=-1, outline=None, run_callbacks=False):
+        results = Step.run_all(self.steps, outline, run_callbacks, ignore_case)
+        all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail = results
+        skip = lambda x: x not in steps_passed and x not in steps_undefined and x not in steps_failed
+
+        steps_skipped = filter(skip, all_steps)
+        if outline:
+            call_hook(
+                'outline', 'scenario', self, order, outline, reasons_to_fail
+                )
+
+        return ScenarioResult(
+            self,
+            steps_passed,
+            steps_failed,
+            steps_skipped,
+            steps_undefined
+            )
 
     def _add_myself_to_steps(self):
         for step in self.steps:
@@ -604,14 +626,19 @@ class Scenario(object):
     def _set_definition(self, definition):
         self.described_at = definition
 
-    def represented(self):
-        make_prefix = lambda x: u"%s%s: " % (u' ' * self.indentation, x)
+    def _get_head(self):
         if self.outlines:
-            prefix = make_prefix(self.language.first_of_scenario_outline)
+            prefix = self._make_prefix(self.language.first_of_scenario_outline)
         else:
-            prefix = make_prefix(self.language.first_of_scenario)
+            prefix = self._make_prefix(self.language.first_of_scenario)
 
-        head = prefix + self.name
+        return prefix + self.name
+
+    def _make_prefix(self, x):
+        return u"%s%s: " % (u' ' * self.indentation, x)
+
+    def represented(self):
+        head = self._get_head()
 
         return strings.rfill(head, self.feature.max_length + 1, append=u'# %s:%d\n' % (self.described_at.file, self.described_at.line))
 
@@ -655,6 +682,13 @@ class Scenario(object):
 
         return scenario
 
+class Background(Scenario):
+
+    desc = BackgroundDescription
+
+    def _get_head(self):
+        return self._make_prefix(self.language.background)
+
 class Feature(object):
     """ Object that represents a feature."""
     described_at = None
@@ -667,11 +701,12 @@ class Feature(object):
         self.name = name
         self.language = language
 
-        self.scenarios, self.description = self._parse_remaining_lines(
+        result = self._parse_remaining_lines(
             remaining_lines,
             original_string,
             with_file
         )
+        self.scenarios, self.background, self.description = result
 
         self.original_string = original_string
 
@@ -699,6 +734,8 @@ class Feature(object):
         return max_length
 
     def _add_myself_to_scenarios(self):
+        if self.background:
+            self.background.feature = self
         for scenario in self.scenarios:
             scenario.feature = self
 
@@ -713,9 +750,15 @@ class Feature(object):
 
         filename = self.described_at.file
         line = self.described_at.line
-        head = strings.rfill(self.get_head(), length, append=u"# %s:%d\n" % (filename, line))
-        for description, line in zip(self.description.splitlines(), self.described_at.description_at):
-            head += strings.rfill(u"  %s" % description, length, append=u"# %s:%d\n" % (filename, line))
+        head = strings.rfill(self.get_head(), length,
+                             append=u"# %s:%d\n" % (filename, line))
+        for description, line in zip(self.description.splitlines(),
+                                     self.described_at.description_at):
+            head += strings.rfill(u"  %s" % description, length,
+                                  append=u"# %s:%d\n" % (filename, line))
+
+        if self.background:
+            head += self.background.represented()
 
         return head
 
@@ -770,34 +813,47 @@ class Feature(object):
         self.described_at = definition
 
     def _parse_remaining_lines(self, lines, original_string, with_file=None):
-
         joined = u"\n".join(lines[1:])
 
-        # replacing occurrencies of Scenario Outline, with just "Scenario"
         scenario_prefix = u'%s:' % self.language.first_of_scenario
+        background_prefix = u'%s:' % self.language.background
+
+        # replacing occurrencies of Scenario Outline, with just "Scenario"
         regex = re.compile(u"%s:\s" % self.language.scenario_separator, re.U | re.I)
         joined = regex.sub(scenario_prefix, joined)
 
-        parts = strings.split_wisely(joined, scenario_prefix)
+        # Split on Background: and Scenario:
+        combo_prefix = u'%s:|%s:' % (self.language.first_of_scenario,
+                                     self.language.background)
+        parts = strings.split_wisely(joined, combo_prefix)
 
         description = u""
-
-        if not re.search("^" + scenario_prefix, joined):
-            description = parts[0]
-            parts.pop(0)
-
-        scenario_strings = [
-            u"%s: %s" % (self.language.first_of_scenario, s) for s in parts if s.strip()
-        ]
+        background = None
         kw = dict(
             original_string=original_string,
             with_file=with_file,
             language=self.language
         )
 
+        description_prefix = u'^%s:|^%s:' % (self.language.first_of_scenario,
+                                             self.language.background)
+
+        if not re.search(description_prefix, joined):
+            description = parts[0]
+            parts.pop(0)
+
+        if re.search(background_prefix, joined):
+            bg = "%s:\n%s" % (self.language.background, parts.pop(0).strip())
+            background = Background.from_string(bg, **kw)
+
+        scenario_strings = [
+            u"%s: %s" % (self.language.first_of_scenario,
+                         s) for s in parts if s.strip()
+        ]
+
         scenarios = [Scenario.from_string(s, **kw) for s in scenario_strings]
 
-        return scenarios, description
+        return scenarios, background, description
 
     def run(self, scenarios=None, ignore_case=True):
         call_hook('before_each', 'feature', self)
@@ -812,6 +868,9 @@ class Feature(object):
         for index, scenario in enumerate(self.scenarios):
             if scenarios_to_run and (index + 1) not in scenarios_to_run:
                 continue
+
+            if self.background:
+                scenarios_ran.append(self.background.run_scenario(ignore_case))
 
             scenarios_ran.extend(scenario.run(ignore_case))
 
