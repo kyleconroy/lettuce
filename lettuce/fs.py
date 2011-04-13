@@ -39,8 +39,13 @@ class FeatureLoader(object):
             to_load = FileSystem.filename(filename, with_extension=False)
             try:
                 module = __import__(to_load)
-            except ValueError:
-                raise ValueError("Cannot load module %s" % filename)
+            except ValueError, e:
+                import traceback
+                err_msg = traceback.format_exc(e)
+                if 'empty module name' in err_msg.lower():
+                    continue
+                else:
+                    raise e
             reload(module) # always take fresh meat :)
             sys.path.remove(root)
 
