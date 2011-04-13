@@ -502,6 +502,8 @@ class Scenario(object):
     indentation = 2
     table_indentation = indentation + 2
     desc = ScenarioDescription
+    background = None
+
     def __init__(self, name, remaining_lines, keys, outlines, with_file=None,
                  original_string=None, language=None):
 
@@ -604,10 +606,14 @@ class Scenario(object):
         if self.outlines:
             first = True
             for index, outline in enumerate(self.outlines):
+                if self.background:
+                    results.append(self.background.run_scenario(ignore_case))
                 results.append(self.run_scenario(ignore_case, outline=outline,
                                                  order=index, run_callbacks=first))
                 first = False
         else:
+            if self.background:
+                results.append(self.background.run_scenario(ignore_case))
             results.append(self.run_scenario(ignore_case, run_callbacks=True))
 
         call_hook('after_each', 'scenario', self)
@@ -768,8 +774,10 @@ class Feature(object):
     def _add_myself_to_scenarios(self):
         if self.background:
             self.background.feature = self
+
         for scenario in self.scenarios:
             scenario.feature = self
+            scenario.background = self.background
 
     def __repr__(self):
         return u'<%s: "%s">' % (self.language.first_of_feature, self.name)
@@ -900,10 +908,6 @@ class Feature(object):
         for index, scenario in enumerate(self.scenarios):
             if scenarios_to_run and (index + 1) not in scenarios_to_run:
                 continue
-
-            if self.background:
-                scenarios_ran.append(self.background.run_scenario(ignore_case))
-
             scenarios_ran.extend(scenario.run(ignore_case))
 
         call_hook('after_each', 'feature', self)
