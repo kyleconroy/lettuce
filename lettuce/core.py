@@ -806,7 +806,7 @@ class Scenario(object):
         return scenario
 
 
-    class Background(Scenario):
+class Background(Scenario):
 
     desc = BackgroundDescription
 
@@ -965,7 +965,7 @@ class Feature(object):
             original_string=original_string,
             with_file=with_file,
             language=self.language,
-            tags=self.tags)
+            tags=self.tags
         )
 
         description_prefix = u'^%s:|^%s:' % (self.language.first_of_scenario,
