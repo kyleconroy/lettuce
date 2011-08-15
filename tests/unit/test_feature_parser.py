@@ -150,6 +150,19 @@ Feature: Big sentence
 """
 
 FEATURE11 = """
+@red @blue
+Feature: Feature with tags at feature level
+  Scenario: big scenario outlines
+    Given I do fill 'description' with '<value_two>'
+
+  Examples:
+    | value_two_thousand_and_three_biiiiiiiiiiiiiiiiiiiiiiiiiiiiig |
+    | 1                                                            |
+    | 2                                                            |
+    | 3                                                            |
+"""
+
+FEATURE12 = """
 Feature: Rent movies
 
     Background:
@@ -321,7 +334,7 @@ def test_comments():
 
 def test_background():
     "It should parse the background section"
-    feature = Feature.from_string(FEATURE11)
+    feature = Feature.from_string(FEATURE12)
     assert_true(feature.background is not None)
     assert_equals(len(feature.background.steps), 2)
     assert_equals(feature.background.steps[0].sentence,
@@ -334,3 +347,7 @@ def test_no_background():
     feature = Feature.from_string(FEATURE1)
     assert_equals(feature.background, None)
 
+def test_feature_tags():
+    "It should collect up tag lines into the feature"
+    feature = Feature.from_string(FEATURE11)
+    assert_equals(feature.tags, ["red", "blue"])

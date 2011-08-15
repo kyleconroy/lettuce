@@ -25,6 +25,7 @@ import zipfile
 from glob import glob
 from os.path import abspath, join, dirname, curdir, exists
 
+
 class FeatureLoader(object):
     """Loader class responsible for findind features and step
     definitions along a given path on filesystem"""
@@ -46,12 +47,14 @@ class FeatureLoader(object):
                     continue
                 else:
                     raise e
+
             reload(module) # always take fresh meat :)
             sys.path.remove(root)
 
     def find_feature_files(self):
         paths = FileSystem.locate(self.base_dir, "*.feature")
         return paths
+
 
 class FileSystem(object):
     """File system abstraction, mainly used for indirection, so that
@@ -228,4 +231,3 @@ class FileSystem(object):
             path = cls.current_dir(name)
 
         return open(path, mode)
-

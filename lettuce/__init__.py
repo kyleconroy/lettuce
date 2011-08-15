@@ -15,16 +15,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-version = '0.1.26'
+version = '0.1.31'
 release = 'barium'
 
 import os
 import sys
+import traceback
 from datetime import datetime
 
 from lettuce import fs
 
-from lettuce.core import Feature, TotalResult
+from lettuce.core import Feature, TotalResult, RunController
 
 from lettuce.terrain import after
 from lettuce.terrain import before
@@ -39,7 +40,15 @@ from lettuce.plugins import xunit_output
 
 from lettuce import exceptions
 
-__all__ = ['after', 'before', 'step', 'world', 'STEP_REGISTRY', 'CALLBACK_REGISTRY', 'call_hook']
+__all__ = [
+    'after',
+    'before',
+    'step',
+    'world',
+    'STEP_REGISTRY',
+    'CALLBACK_REGISTRY',
+    'call_hook',
+]
 
 try:
     terrain = fs.FileSystem._import("terrain")
@@ -54,6 +63,7 @@ except Exception, e:
         sys.stderr.write(exceptions.traceback.format_exc(e))
         raise SystemExit(1)
 
+
 class Runner(object):
     """ Main lettuce's test runner
 
@@ -61,7 +71,8 @@ class Runner(object):
     features and step definitions on there.
     """
     def __init__(self, base_path, scenarios=None, verbosity=0,
-                 enable_xunit=False, xunit_filename=None):
+                 enable_xunit=False, xunit_filename=None,
+                 run_controller=None):
         """ lettuce.Runner will try to find a terrain.py file and
         import it from within `base_path`
         """
@@ -74,6 +85,7 @@ class Runner(object):
         sys.path.insert(0, base_path)
         self.loader = fs.FeatureLoader(base_path)
         self.verbosity = verbosity
+        self.run_controller = run_controller or RunController()
         self.scenarios = scenarios and map(int, scenarios.split(",")) or None
 
         sys.path.remove(base_path)
@@ -123,9 +135,16 @@ class Runner(object):
         try:
             for filename in features_files:
                 feature = Feature.from_file(filename)
-                results.append(feature.run(self.scenarios))
+                results.append(
+                    feature.run(self.scenarios, self.run_controller))
+
         except exceptions.LettuceSyntaxError, e:
             sys.stderr.write(e.msg)
+            failed = True
+        except:
+            e = sys.exc_info()[1]
+            print "Died with %s" % str(e)
+            traceback.print_exc()
             failed = True
 
         finally:

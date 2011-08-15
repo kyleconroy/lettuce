@@ -22,29 +22,18 @@ from lettuce import strings
 from lettuce.terrain import after
 from lettuce.terrain import before
 
+
 def wrt(what):
     sys.stdout.write(what.encode('utf-8'))
 
-@before.each_step
-def print_step_running(step):
-    wrt(step.represent_string(step.original_sentence))
-    if step.hashes:
-        wrt(step.represent_hashes())
 
 @after.each_step
-def print_step_ran(step):
-    if step.scenario.outlines:
-        return
+def print_step_running(step):
+    wrt(step.represent_string(step.original_sentence).rstrip())
+    if not step.defined_at:
+        wrt(" (undefined)")
 
-    if step.hashes:
-        wrt("\033[A" * (len(step.hashes) + 1))
-
-    if step.defined_at:
-        wrt("\033[A" + step.represent_string(step.original_sentence))
-
-    else:
-        wrt(step.represent_string(step.original_sentence).rstrip() + " (undefined)\n")
-
+    wrt('\n')
     if step.hashes:
         wrt(step.represent_hashes())
 
@@ -54,10 +43,12 @@ def print_step_ran(step):
         for line in step.why.traceback.splitlines():
             print_spaced(line)
 
+
 @before.each_scenario
 def print_scenario_running(scenario):
     wrt('\n')
     wrt(scenario.represented())
+
 
 @after.outline
 def print_outline(scenario, order, outline, reasons_to_fail):
@@ -79,10 +70,12 @@ def print_outline(scenario, order, outline, reasons_to_fail):
         for line in elines:
             print_spaced(line)
 
+
 @before.each_feature
 def print_feature_running(feature):
     wrt("\n")
     wrt(feature.represented())
+
 
 @after.all
 def print_end(total):
@@ -91,35 +84,27 @@ def print_end(total):
     wrt("%d %s (%d passed)\n" % (
         total.features_ran,
         word,
-        total.features_passed
-        )
-    )
+        total.features_passed))
 
     word = total.scenarios_ran > 1 and "scenarios" or "scenario"
     wrt("%d %s (%d passed)\n" % (
         total.scenarios_ran,
         word,
-        total.scenarios_passed
-        )
-    )
+        total.scenarios_passed))
 
     steps_details = []
-    for kind in ("failed","skipped",  "undefined"):
+    for kind in ("failed", "skipped", "undefined"):
         attr = 'steps_%s' % kind
         stotal = getattr(total, attr)
         if stotal:
-            steps_details.append(
-                "%d %s" % (stotal, kind)
-            )
+            steps_details.append("%d %s" % (stotal, kind))
 
     steps_details.append("%d passed" % total.steps_passed)
     word = total.steps > 1 and "steps" or "step"
     wrt("%d %s (%s)\n" % (
         total.steps,
         word,
-        ", ".join(steps_details)
-        )
-    )
+        ", ".join(steps_details)))
 
     if total.proposed_definitions:
         wrt("\nYou can implement step definitions for undefined steps with these snippets:\n\n")
@@ -131,14 +116,11 @@ def print_end(total):
             wrt("def %s:\n" % method_name)
             wrt("    assert False, 'This step must be implemented'\n")
 
+
 def print_no_features_found(where):
     where = core.fs.relpath(where)
     if not where.startswith(os.sep):
         where = '.%s%s' % (os.sep, where)
 
     wrt('Oops!\n')
-    wrt(
-        'could not find features at '
-        '%s\n' % where
-    )
-
+    wrt('could not find features at %s\n' % where)
