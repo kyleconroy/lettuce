@@ -17,6 +17,7 @@
 
 import re
 import codecs
+import logging
 import string
 import sys
 import unicodedata
@@ -524,6 +525,7 @@ class RunController(object):
 
 
 class TagChecker(object):
+
     def __init__(self, tags=None):
         "Note that tags can contain ~tag which means do not run if have tag"
         self.tags_to_run = tags or []
@@ -718,7 +720,8 @@ class Scenario(object):
             steps_passed,
             steps_failed,
             steps_skipped,
-            steps_undefined
+            steps_undefined,
+            True
             )
 
     def _add_myself_to_steps(self):
@@ -834,7 +837,7 @@ class Feature(object):
             with_file
         )
 
-        #self.scenarios, self.background, self.description = result
+        self.scenarios, self.background, self.description = result
 
         self.original_string = original_string
 
@@ -960,6 +963,7 @@ class Feature(object):
         description_lines = strings.get_lines_till_next_scenario(lines, scenario_prefix)
 
         description = "\n".join(s for s in description_lines if s.strip())
+
         background = None
         kw = dict(
             original_string=original_string,
@@ -972,8 +976,8 @@ class Feature(object):
                                              self.language.background)
 
         if not re.search(description_prefix, joined):
-            description = parts[0]
-            parts.pop(0)
+            p = parts.pop(0)
+            logging.error(p)
 
         if re.search(background_prefix, joined):
             bg = "%s:\n%s" % (self.language.background, parts.pop(0).strip())
